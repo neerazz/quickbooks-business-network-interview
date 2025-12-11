@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: QuickBooks Business Network API
+  description: |
+    API for managing business relationships, network visualization, search, 
+    entity resolution, and AI-powered insights.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api-support@quickbooks.com
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+
+tags:
+  - name: Business
+    description: Business entity management
+  - name: Network
+    description: Network visualization and relationships
+  - name: Search
+    description: Business search operations
+  - name: Transaction
+    description: Transaction management
+  - name: Entity Resolution
+    description: Entity deduplication and merging
+  - name: Graph RAG
+    description: AI-powered natural language queries
+  - name: Metrics
+    description: SLA and performance metrics
+  - name: Audit
+    description: Audit log operations
+
+paths:
+  /businesses:
+    get:
+      tags: [Business]
+      summary: List all businesses
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: List of businesses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Business'
+    post:
+      tags: [Business]
+      summary: Create a new business
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BusinessCreate'
+      responses:
+        '201':
+          description: Business created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Business'
+
+  /businesses/{id}:
+    get:
+      tags: [Business]
+      summary: Get business by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Business details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Business'
+        '404':
+          description: Business not found
+
+  /networks/{businessId}:
+    get:
+      tags: [Network]
+      summary: Get network map for a business
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: depth
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 3, default: 1 }
+        - name: includeWeights
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Network map data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NetworkMap'
+
+  /networks/{businessId}/export:
+    get:
+      tags: [Network]
+      summary: Export network data
+      parameters:
+        - name: businessId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Exported data
+          content:
+            application/json:
+              schema: { type: object }
+            text/csv:
+              schema: { type: string }
+
+  /search:
+    get:
+      tags: [Search]
+      summary: Search for businesses
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+
+  /transactions:
+    post:
+      tags: [Transaction]
+      summary: Record a transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionCreate'
+      responses:
+        '201':
+          description: Transaction recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+
+  /entity-resolution/resolve:
+    post:
+      tags: [Entity Resolution]
+      summary: Submit entities for resolution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/EntityInput'
+      responses:
+        '202':
+          description: Resolution job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolutionJob'
+
+  /entity-resolution/feedback:
+    post:
+      tags: [Entity Resolution]
+      summary: Submit feedback on resolution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolutionFeedback'
+      responses:
+        '200':
+          description: Feedback recorded
+
+  /graph-rag/query:
+    post:
+      tags: [Graph RAG]
+      summary: Natural language query
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query: { type: string }
+                maxHops: { type: integer, default: 3 }
+      responses:
+        '200':
+          description: Query response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphRAGResponse'
+
+  /metrics/sla:
+    get:
+      tags: [Metrics]
+      summary: Get SLA metrics
+      responses:
+        '200':
+          description: SLA metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SLAMetrics'
+
+  /audit-log/entity/{entityId}:
+    get:
+      tags: [Audit]
+      summary: Get audit logs for an entity
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLog'
+
+components:
+  schemas:
+    Business:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        address: { type: string }
+        category: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BusinessCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        address: { type: string }
+        category: { type: string }
+
+    NetworkMap:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Edge'
+        totalNodes: { type: integer }
+        totalEdges: { type: integer }
+        depth: { type: integer }
+
+    Node:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { type: string }
+
+    Edge:
+      type: object
+      properties:
+        relationshipId: { type: string }
+        sourceId: { type: string }
+        targetId: { type: string }
+        type: { type: string, enum: [VENDOR_OF, CLIENT_OF] }
+        weight: { type: number }
+
+    SearchResults:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Business'
+        total: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+
+    Transaction:
+      type: object
+      properties:
+        id: { type: string }
+        sourceBusinessId: { type: string }
+        targetBusinessId: { type: string }
+        amount: { type: number }
+        timestamp: { type: string, format: date-time }
+
+    TransactionCreate:
+      type: object
+      required: [sourceBusinessId, targetBusinessId, amount]
+      properties:
+        sourceBusinessId: { type: string }
+        targetBusinessId: { type: string }
+        amount: { type: number }
+
+    EntityInput:
+      type: object
+      properties:
+        name: { type: string }
+        address: { type: string }
+        metadata: { type: object }
+
+    ResolutionJob:
+      type: object
+      properties:
+        jobId: { type: string }
+        status: { type: string }
+
+    ResolutionFeedback:
+      type: object
+      properties:
+        resolutionId: { type: string }
+        approved: { type: boolean }
+        comment: { type: string }
+
+    GraphRAGResponse:
+      type: object
+      properties:
+        answer: { type: string }
+        sources:
+          type: array
+          items: { type: string }
+        confidence: { type: number }
+
+    SLAMetrics:
+      type: object
+      properties:
+        p50: { type: number }
+        p75: { type: number }
+        p90: { type: number }
+        p95: { type: number }
+        p99: { type: number }
+        timestamp: { type: string, format: date-time }
+
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        userId: { type: string }
+        timestamp: { type: string, format: date-time }

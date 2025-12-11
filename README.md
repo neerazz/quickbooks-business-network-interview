@@ -1,84 +1,35 @@
-# QuickBooks Business Network - System Design Concept
+# Design a QuickBooks Business Network
 
-> **Craft Demo for Principal Software Engineer Role**  
-> **Candidate**: [Neeraj Kumar Singh](https://www.linkedin.com/in/neerajkumarsinghb)  
-> **Date**: December 2025
+## Introduction
 
----
+In this system design problem, you are tasked with designing a system within Quickbooks that efficiently maps out a business network graph. You will identify relationships between businesses, focusing primarily on vendor-client connections. This system aims to help users visualize which business is selling to who and understand the network of their business interactions.
 
-## 🚀 60-Second Overview
+## Problem Scope
 
-This repository contains the system design and architectural proof-of-concept for the **QuickBooks Business Network**, a platform designed to map the global small business economy.
+Design a system that enables QuickBooks users to efficiently navigate through their network of business relationships. This includes allowing them to view their vendors and clients, search for a specific business client-vendor relationship, and map the relationship between businesses on the network.
 
-**The Problem**: A network of **1M+ businesses** generates **12M+ events/month**, but their relationships are hidden in disparate data.  
-**The Solution**: An event-driven, polyglot architecture that resolves business identities with **99.99% accuracy** and enables sub-second graph exploration.  
-**Key Tech Stack**: Java (Spring Boot), Kafka, Neo4j, PostgreSQL, Elasticsearch, Python (ML).
+## Use Cases
 
-### 🏆 Key Scalability Targets
-| Metric | Design Target | Achieved Via |
-| :--- | :--- | :--- |
-| **Entities** | **1,000,000** | Horizontal Sharding |
-| **Relationships** | **50,000,000** | Neo4j (Index-Free Adjacency) |
-| **Search Latency** | **<500ms** (p95) | Elasticsearch + Redis L2 Cache |
-| **Graph Query** | **<2s** (p95) | Optimized Cypher + Read Replicas |
-| **Resolution Accuracy** | **99.99%** | 4-Stage ML Pipeline (Block/Compare) |
+Your system should support the following primary use cases:
 
----
+1. **Business views their network:** A user can view a map of their business's network, highlighting vendors and clients.
+2. **Business searches for a specific relationship:** A user can search for a specific business and understand their direct and indirect relationships.
+3. **Business can grow the network:** A user can add a new business as a vendor/client of their business. The proposed new business may or may not already exist in the network, but with different descriptors (free-text category/name for example).
+4. **Service maintains high availability:** The system should be highly available and responsive.
 
-## 🏗️ Architecture
+## Constraints and Assumptions
 
-The system follows a **Microservices** pattern with **Polyglot Persistence**, decoupled by an **Event-Driven** backbone (Kafka).
+* Assume we're dealing with 1 million businesses.
+* Each business can have up to 100 direct relationships (vendors or clients).
+* The system should support 10 million relationship searches per month.
+* Relationships are undirected and weighted by transaction volume.
+* Traffic is not evenly distributed; some relationships are queried more frequently.
 
-### High-Level Design
-![Architecture Diagram](docs/architecture/high_level_design.png)
-*(See `docs/architecture` for detailed mermaid diagrams)*
+## System Maintenance & Developer Experience Problem
 
-### Core Services
-1.  **Ingest Service**: High-throughput event ingestion (Invoice/Payment) via **Transactional Outbox**.
-2.  **Entity Resolution Service**: The "Brain" - dedupes businesses using ML.
-3.  **Network Service**: Manages the graph (Neo4j) and relationship weights.
-4.  **Search Service**: Hybrid search (Keyword + Vector) using Graph RAG.
+The project currently suffers from:
 
----
-
-## 🧠 The "Killer Feature": Entity Resolution
-
-Naive string matching fails at scale ($O(n^2)$). We implemented a **4-Stage Pipeline**:
-
-1.  **Standardize**: `Corp` -> `Corporation`, `TX` -> `Texas`.
-2.  **Block**: Reduces comparison space by **99.5%** using Prefix+State keys.
-3.  **Compare**: 7-Feature Vector (Levenshtein, Jaro-Winkler, Address Sim).
-4.  **Classify**: XGBoost Model (>0.85 Confidence).
-
----
-
-## 🛡️ Reliability & Trade-offs
-
-### Decisions
-*   **Polyglot Persistence**: We chose to maintain 5 data stores (Neo4j, Postgres, ES, Redis, Milvus) to meet the <2s graph traversal SLA, accepting higher operational complexity over the poor performance of a single-DB solution (Postgres CTEs took 3.2s).
-*   **Eventual Consistency**: Relationship edges are consistent within **5 seconds** (CAP Theorem AP mode), while Financial Transactions remain ACID (CP mode) in Postgres.
-
-### Patterns Implemented
-*   **Transactional Outbox**: Guarantees simple exactly-once event processing.
-*   **Circuit Breakers**: Resilience4j prevents cascading failures to the Graph DB.
-*   **Dead Letter Queues**: Ensures no event is ever lost, only delayed.
-
----
-
-## 📂 Repository Structure
-
-```bash
-/
-├── docs/
-│   ├── architecture/        # Mermaid diagrams & System flows
-│   ├── deep-dives/          # Entity Resolution logic details
-│   └── interviews/          # Presentation Deck & Strategy
-├── src/
-│   ├── main/java/           # Service definitions (Proto/Interfaces)
-│   └── scripts/             # Capacity planning calculators
-└── README.md                # This file
-```
-
----
-
-*Designed & Architected by Neeraj Kumar Singh.*
+1. **Script Proliferation**: Multiple start scripts (`start-all`, `start-complete`) causing confusion and maintenance burden.
+2. **Lack of End-to-End Guarantee**: Existing scripts do not rigorously validate that the *functionality* (UI, Backend, AI) is actually working together, often requiring manual debugging after startup.
+3. **Cross-Platform Inconsistency**: Lack of unified Linux/Windows startup experience.
+4. **Project "Junk"**: Log files and temporary artifacts cluttering the root directory.
