@@ -121,9 +121,9 @@ graph TB
 
 ### Entity Resolution Service (Port 8085)
 
-- 4-stage pipeline: Standardize → Block → Compare → Classify
+- 4-stage pipeline: Standardize -> Block -> Compare -> Classify
 - ML-based similarity scoring
-- Configurable thresholds (≥0.85 match, 0.50-0.85 review)
+- Configurable thresholds (>=0.85 match, 0.50-0.85 review)
 
 ### Graph RAG Service (Port 8086)
 

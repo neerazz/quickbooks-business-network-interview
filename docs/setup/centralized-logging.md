@@ -7,42 +7,11 @@ The QuickBooks Business Network uses a centralized logging system with distribut
 ## Architecture
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Java      │     │   Python    │     │   Other     │
-│  Services   │     │  AI Service │     │  Services   │
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │
-       │ (Logback)         │ (Python)          │
-       │                   │                   │
-       └───────────────────┴───────────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │    Kafka     │
-                    │ application. │
-                    │     logs     │
-                    └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │   Logstash   │
-                    │  (Parsing &  │
-                    │  Enrichment) │
-                    └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │Elasticsearch │
-                    │  logs-*      │
-                    │   indices    │
-                    └──────┬───────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │    Kibana    │
-                    │ (Dashboards) │
-                    └──────────────┘
+Java services (Logback) ----\
+Python AI service -----------> Kafka topic: application.logs -> Logstash -> Elasticsearch (logs-YYYY.MM.dd) -> Kibana dashboards
+Other services -------------/
 ```
+
 
 ## Components
 
@@ -142,12 +111,13 @@ All logs follow this JSON structure:
 ### Example Trace Flow
 ```
 Gateway (trace_id: abc123)
-  ├─> Business Service (trace_id: abc123, span_id: span1)
-  │     └─> Neo4j query
-  └─> Entity Resolution (trace_id: abc123, span_id: span2)
-        └─> AI Service (trace_id: abc123, span_id: span3)
-              └─> ML model inference
+  -> Business Service (trace_id: abc123, span_id: span1)
+       -> Neo4j query
+  -> Entity Resolution (trace_id: abc123, span_id: span2)
+       -> AI Service (trace_id: abc123, span_id: span3)
+             -> ML model inference
 ```
+
 
 ## Configuration
 

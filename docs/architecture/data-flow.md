@@ -73,6 +73,29 @@ sequenceDiagram
     KAFKA->>ES: Index business (via consumer)
 ```
 
+**Example request/response**
+
+```json
+POST /api/v1/businesses
+{
+  "name": "Acme Supplies",
+  "address": "10 Main St, Austin, TX",
+  "category": "Office Goods"
+}
+```
+
+```json
+201 Created
+{
+  "id": "biz-123",
+  "name": "Acme Supplies",
+  "neo4jNodeId": 445,
+  "status": "ACTIVE"
+}
+```
+
+**Kafka event:** `business.created` with `businessId`, `name`, `category`, `timestamp`.
+
 ## Flow 2: Transaction Recording
 
 ```mermaid
@@ -96,6 +119,22 @@ sequenceDiagram
     KAFKA->>NS: Consume event
     NS->>NEO: Update relationship weight
 ```
+
+**Example request**
+
+```json
+POST /api/v1/transactions
+{
+  "sourceBusinessId": "biz-123",
+  "targetBusinessId": "biz-999",
+  "type": "INVOICE",
+  "amount": 1200.50,
+  "currency": "USD",
+  "timestamp": "2024-12-10T16:00:00Z"
+}
+```
+
+**Weight calculation:** relationship weight = normalized transaction volume over trailing 90 days. Kafka event `transaction.created` is the single source of truth for downstream weight updates.
 
 ## Flow 3: Network Visualization
 
@@ -121,6 +160,22 @@ sequenceDiagram
     
     NS-->>GW: Network map
     GW-->>UI: Nodes and edges
+```
+
+**Example response (depth=1)**
+
+```json
+{
+  "rootBusinessId": "biz-123",
+  "nodes": [
+    { "id": "biz-123", "label": "Acme Supplies" },
+    { "id": "biz-999", "label": "Northwind LLC" }
+  ],
+  "edges": [
+    { "source": "biz-123", "target": "biz-999", "weight": 0.42, "type": "CLIENT" }
+  ],
+  "cache": { "hit": false, "ttlSeconds": 600 }
+}
 ```
 
 ## Flow 4: Entity Resolution Pipeline
@@ -157,11 +212,23 @@ sequenceDiagram
         KAFKA->>RF: Process merge
         RF->>PG: Merge entities
     else Low Confidence (0.50-0.85)
-        ER->>PG: Flag for review
+    ER->>PG: Flag for review
     else Non-Match (<0.50)
         ER->>PG: Keep separate
     end
 ```
+
+**Example inputs**
+
+- Ingest event (`entity.pending`): `{ "rawName": "Acme Supply Co.", "address": "10 Main St", "country": "US" }`
+- Standardize output: `{ "name_std": "ACME SUPPLY COMPANY", "address_std": "10 MAIN STREET, US" }`
+- Blocking key: `SUPPLY|US|10MAIN`
+
+**Match decisions**
+
+- `>=0.85`: auto-merge, publish `entity.resolved`
+- `0.50-0.85`: create review task, expose in review UI
+- `<0.50`: keep separate, no merge
 
 ## Flow 5: Graph RAG Query
 
@@ -195,6 +262,26 @@ sequenceDiagram
     GW-->>UI: Display answer
 ```
 
+**Example request/response**
+
+```json
+POST /api/v1/graph-rag/query
+{
+  "question": "Who are Acme's top vendors in Texas?"
+}
+```
+
+```json
+{
+  "answer": "Acme's top vendors in Texas are Northwind LLC and Lone Star Parts.",
+  "sources": [
+    { "type": "graph", "nodeId": "biz-999" },
+    { "type": "graph", "nodeId": "biz-777" },
+    { "type": "vector", "similarity": 0.82 }
+  ]
+}
+```
+
 ## Flow 6: Search
 
 ```mermaid
@@ -214,6 +301,22 @@ sequenceDiagram
     SS->>SS: Apply business rules
     SS-->>GW: Paginated results
     GW-->>UI: Display results
+```
+
+**Example query/response**
+
+```json
+GET /api/v1/search/entities?q=acme&size=3
+```
+
+```json
+{
+  "results": [
+    { "id": "biz-123", "name": "Acme Supplies", "score": 8.7 },
+    { "id": "biz-124", "name": "Acme Industrial", "score": 7.9 }
+  ],
+  "tookMs": 42
+}
 ```
 
 ## Data Consistency Patterns

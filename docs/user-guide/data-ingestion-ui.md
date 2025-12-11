@@ -28,7 +28,7 @@ The recommended way to populate test data. Configure:
 
 **To generate data:**
 1. Adjust settings as needed
-2. Click "🚀 Start Batch Generation"
+2. Click "Start Batch Generation"
 3. Watch the progress bar
 4. Click "View Flow Monitor" to track processing
 
@@ -36,7 +36,7 @@ The recommended way to populate test data. Configure:
 
 For testing individual events:
 
-1. Expand "📝 Single Event Ingestion"
+1. Expand "Single Event Ingestion"
 2. Fill in the form:
    - **Event Type**: INVOICE, PAYMENT, VENDOR_ADD, or CUSTOMER_ADD
    - **Source Business**: Name and optional category

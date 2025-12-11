@@ -120,7 +120,7 @@ curl "http://localhost:8080/api/v1/search/entities?q=Test+Company"
 |-------|---------------|
 | Ingest to PostgreSQL | < 100ms |
 | Outbox publishing | < 1 second |
-| Kafka → Resolve Flow | < 5 seconds |
+| Kafka -> Resolve Flow | < 5 seconds |
 | Entity Resolution | < 100ms |
 | Neo4j persistence | < 500ms |
 | Elasticsearch indexing | < 5 seconds |

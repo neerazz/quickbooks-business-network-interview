@@ -17,9 +17,9 @@ for service in "${SERVICES[@]}"; do
     port="${service##*:}"
     status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$port/actuator/health)
     if [ "$status" == "200" ]; then
-        echo "✓ $name is healthy"
+        echo "[OK] $name ($port) is healthy"
     else
-        echo "✗ $name is unhealthy (HTTP $status)"
+        echo "[FAIL] $name ($port) is unhealthy (HTTP $status)"
     fi
 done
 ```
@@ -256,16 +256,19 @@ services:
 
 ```bash
 # Restart services one at a time
-SERVICES=(gateway business network search transaction entity-resolution graph-rag)
+SERVICES=("gateway:8080" "business:8081" "network:8082" "search:8083" "transaction:8084" "entity-resolution:8085" "graph-rag:8086")
 
 for service in "${SERVICES[@]}"; do
-    echo "Restarting $service..."
-    docker-compose restart $service
+    name="${service%%:*}"
+    port="${service##*:}"
+
+    echo "Restarting $name..."
+    docker-compose restart "$name"
     sleep 30  # Wait for health check
     
-    health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:808X/actuator/health)
+    health=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$port/actuator/health)
     if [ "$health" != "200" ]; then
-        echo "ERROR: $service failed health check!"
+        echo "ERROR: $name failed health check!"
         exit 1
     fi
 done

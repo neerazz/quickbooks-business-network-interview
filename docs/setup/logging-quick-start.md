@@ -1,6 +1,6 @@
 # Centralized Logging - Quick Start Guide
 
-## 🚀 Getting Started in 5 Minutes
+## Getting Started in 5 Minutes
 
 ### 1. Start the Infrastructure
 
@@ -45,7 +45,7 @@ curl http://localhost:5601/api/status
 2. Select `logs-*` index pattern
 3. You should see logs from all services!
 
-## 🔍 Common Search Queries
+## Common Search Queries
 
 ### Find All Errors
 ```
@@ -72,7 +72,7 @@ message: *timeout* OR message: *slow*
 message: *database* AND level: "ERROR"
 ```
 
-## 📊 Pre-Configured Dashboards
+## Pre-Configured Dashboards
 
 Access these dashboards from Kibana's **Dashboard** section:
 
@@ -91,7 +91,7 @@ Access these dashboards from Kibana's **Dashboard** section:
    - Service call graphs
    - Response time distribution
 
-## 🐛 Debugging a Request
+## Debugging a Request
 
 ### Scenario: User reports an error creating a business
 
@@ -123,7 +123,7 @@ Access these dashboards from Kibana's **Dashboard** section:
 14:30:45.256 | gateway          | ERROR | Request failed: 500 Internal Server Error
 ```
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### No Logs Appearing?
 
@@ -168,7 +168,7 @@ Access these dashboards from Kibana's **Dashboard** section:
    docker logs qb-kibana
    ```
 
-## 📈 Performance Tips
+## Performance Tips
 
 ### For Development
 - Keep all logging enabled
@@ -180,7 +180,7 @@ Access these dashboards from Kibana's **Dashboard** section:
 - Sample 10% of traces: `SPRING_SLEUTH_SAMPLER_PROBABILITY=0.1`
 - Filter verbose logs in Logstash
 
-## 🎯 Best Practices
+## Best Practices
 
 1. **Always include context**:
    ```java
@@ -203,14 +203,14 @@ Access these dashboards from Kibana's **Dashboard** section:
    - Old indices are automatically deleted
    - Adjust retention in `scripts/db/init-kafka.sh`
 
-## 📚 Next Steps
+## Next Steps
 
 - Read full documentation: `docs/setup/centralized-logging.md`
 - Configure custom dashboards in Kibana
 - Set up alerting for critical errors
 - Integrate with your monitoring tools
 
-## 🆘 Need Help?
+## Need Help?
 
 - Check service logs: `docker logs <container-name>`
 - View all containers: `docker-compose ps`
@@ -219,6 +219,6 @@ Access these dashboards from Kibana's **Dashboard** section:
 
 ---
 
-**Happy Debugging! 🎉**
+**Happy debugging!**
 
 No more navigating through multiple terminals - all your logs are now in one place!

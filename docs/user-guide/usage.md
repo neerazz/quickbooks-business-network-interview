@@ -51,7 +51,7 @@ The network visualization shows businesses as nodes and relationships as edges.
 
 **Adding a Relationship:**
 
-1. Navigate to Relationships → Add New
+1. Navigate to Relationships > Add New
 2. Select source business
 3. Select target business
 4. Choose relationship type (Vendor, Client)
@@ -84,13 +84,13 @@ The Graph RAG feature allows natural language queries about the business network
 
 **JSON Export:**
 
-1. Navigate to Network → Export
+1. Navigate to Network > Export
 2. Select JSON format
 3. Click Download
 
 **CSV Export:**
 
-1. Navigate to Network → Export
+1. Navigate to Network > Export
 2. Select CSV format
 3. Click Download
 
@@ -98,7 +98,7 @@ The Graph RAG feature allows natural language queries about the business network
 
 When the system identifies potential duplicate businesses:
 
-1. Navigate to Entity Resolution → Pending Reviews
+1. Navigate to Entity Resolution > Pending Reviews
 2. Review the match candidates
 3. View confidence scores and matching evidence
 4. Click Approve to merge, or Reject to keep separate
@@ -121,7 +121,7 @@ When the system identifies potential duplicate businesses:
 
 ### Monitoring SLA Metrics
 
-1. Navigate to Metrics → SLA Dashboard
+1. Navigate to Metrics > SLA Dashboard
 2. View p50, p95, p99 response times
 3. Check for any threshold breaches
 4. Review historical trends
