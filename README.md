@@ -25,11 +25,6 @@ Your system should support the following primary use cases:
 * Relationships are undirected and weighted by transaction volume.
 * Traffic is not evenly distributed; some relationships are queried more frequently.
 
-## System Maintenance & Developer Experience Problem
+## Proposed Solution: QuickBooks Business Network
 
-The project currently suffers from:
-
-1. **Script Proliferation**: Multiple start scripts (`start-all`, `start-complete`) causing confusion and maintenance burden.
-2. **Lack of End-to-End Guarantee**: Existing scripts do not rigorously validate that the *functionality* (UI, Backend, AI) is actually working together, often requiring manual debugging after startup.
-3. **Cross-Platform Inconsistency**: Lack of unified Linux/Windows startup experience.
-4. **Project "Junk"**: Log files and temporary artifacts cluttering the root directory.
+The [QuickBooks Business Network](https://docs.google.com/presentation/d/e/2PACX-1vTlzTAIxtlDJ8LA4sn8k-DWV25FL1UmI8UsXOfKUlSKrEtEMjObXJWwY28oPjYsAYYcGPXIiQ6H7ef1/pub?start=false&loop=false&delayms=3000&slide=id.p8) is designed to efficiently map and visualize business relationships within the QuickBooks ecosystem. The system leverages a graph database to represent businesses as nodes and their vendor-client relationships as edges, weighted by transaction volume.
