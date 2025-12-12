@@ -1,353 +1,463 @@
-# Data Flow Documentation
+# QuickBooks Business Network - Visual Service Architecture
 
-## Overview
+## High-Level Service Connections Diagram
 
-This document describes the data flow patterns in the QuickBooks Business Network platform.
-
-## High-Level Data Flow
+[Miro](https://miro.com/app/board/uXjVGc_CdZ4=/?share_link_id=443014834206)
 
 ```mermaid
-flowchart LR
-    subgraph Client
-        UI[React UI]
+graph TB
+    subgraph "Client Layer"
+        UI[React UI :3000]
     end
+
+    subgraph "Gateway Layer"
+        GW[API Gateway :8080]
+        AUTH[Auth Service :8092]
+    end
+
+    subgraph "Business Logic Layer"
+        BS[Business Service :8081]
+        TS[Transaction Service :8084]
+        PS[Payment Service :8084]
+        NS[Network Service :8082<br/>ORCHESTRATOR]
+        ER[Entity Resolution :8085]
+        SS[Search Service :8083]
+        RAG[Graph RAG :8086]
+        TC[Training Consumer :8089]
+        DG[Data Generator :8090]
+        SLA[SLA Metrics :8091]
+    end
+
+    subgraph "AI Layer"
+        AI[AI Service :8000]
+    end
+
+    subgraph "Data Layer"
+        PG[(PostgreSQL :5432)]
+        NEO[(Neo4j :7687)]
+        ES[(Elasticsearch :9200)]
+        KAFKA[Kafka :9092]
+        REDIS[(Redis :6379)]
+        VECTOR[(Vector DB :19530)]
+    end
+
+    %% Client to Gateway
+    UI -->|HTTPS| GW
+
+    %% Gateway to Services
+    GW -->|Auth Check| AUTH
+    GW -->|Route Requests| BS
+    GW -->|Route Requests| NS
+    GW -->|Route Requests| SS
+    GW -->|Route Requests| TS
+    GW -->|Route Requests| RAG
+
+    %% Business Service Connections
+    BS -->|Read/Write| PG
+    BS -->|Produce business.events| KAFKA
+    BS -->|Cache| REDIS
+
+    %% Transaction Service Connections
+    TS -->|Store Transactions| PG
+    TS -->|Produce transaction.events| KAFKA
+
+    %% Network Service Connections (ORCHESTRATOR)
+    NS -->|Graph Queries| NEO
+    NS -->|Cache| REDIS
+    NS -->|Consume business/transaction events| KAFKA
+    NS -->|Enrich Data| BS
+    NS -->|HTTP: Trigger Resolution| ER
+    NS -->|Produce search.index.requests| KAFKA
+
+    %% Entity Resolution Connections (KEY: Calls Search Service)
+    ER -->|HTTP: Fuzzy Search Matching| SS
+    ER -->|ML Inference| AI
+    ER -->|Semantic Search| VECTOR
+
+    %% Search Service Connections
+    SS -->|Fuzzy Search Queries| ES
+    SS -->|Graph Context| NEO
+    SS -->|Cache Results| REDIS
+    SS -->|Consume search.index.requests| KAFKA
+    SS -->|Index New Businesses| ES
+
+    %% Payment Service Connections
+    PS -->|Consume transaction.events| KAFKA
+    PS -->|Update Status| PG
+
+    %% Graph RAG Connections
+    RAG -->|Embeddings| AI
+    RAG -->|Vector Search| VECTOR
+    RAG -->|Subgraph Query| NEO
+    RAG -->|LLM Generate| AI
+
+    %% Training Consumer Connections
+    TC -->|Consume Events| KAFKA
+    TC -->|Store Training Data| PG
+    TC -->|Train Models| AI
+
+    %% AI Service Connections
+    AI -->|Update Embeddings| VECTOR
+
+    %% SLA Metrics Connections
+    SLA -.->|Scrape Metrics| BS
+    SLA -.->|Scrape Metrics| NS
+    SLA -.->|Scrape Metrics| SS
+    SLA -.->|Scrape Metrics| TS
+    SLA -.->|Scrape Metrics| ER
+    SLA -->|Store Metrics| REDIS
+    SLA -->|Monitor Lag| KAFKA
+
+    %% Data Generator Connections
+    DG -->|Generate Test Data| KAFKA
+    DG -.->|Verify| PG
+    DG -.->|Verify| NEO
+    DG -.->|Verify| ES
+
+    %% Auth Service
+    AUTH -->|Session Cache| REDIS
+
+    style UI fill:#e1f5ff
+    style GW fill:#fff4e1
+    style AUTH fill:#fff4e1
+    style NS fill:#ffcccc
+    style ER fill:#ffe6cc
+    style AI fill:#ffe1f5
+    style PG fill:#e8f5e9
+    style NEO fill:#e8f5e9
+    style ES fill:#e8f5e9
+    style KAFKA fill:#fff3e0
+    style REDIS fill:#e8f5e9
+    style VECTOR fill:#e8f5e9
+```
+
+## Critical Data Flow: Business Creation → Entity Resolution
+
+```mermaid
+sequenceDiagram
+    participant UI as React UI
+    participant GW as API Gateway
+    participant AUTH as Auth Service
+    participant BS as Business Service
+    participant PG as PostgreSQL
+    participant KAFKA as Kafka
+    participant NS as Network Service
+    participant ER as Entity Resolution
+    participant SS as Search Service
+    participant ES as Elasticsearch
+    participant AI as AI Service
+    participant VDB as Vector DB
+    participant NEO as Neo4j
+
+    UI->>GW: POST /businesses {data}
+    GW->>AUTH: Validate token
+    AUTH-->>GW: Valid ✓
+    GW->>BS: Create business
+    BS->>PG: INSERT business
+    PG-->>BS: business_id=12345
+    BS->>KAFKA: Publish BusinessCreated (business.events)
+    BS-->>GW: Success
+    GW-->>UI: 201 Created
+
+    Note over KAFKA,NS: Async Orchestration Begins
+
+    KAFKA->>NS: Consume event (Group: network-service)
     
-    subgraph Gateway
+    Note over NS,ER: Network Service orchestrates Entity Resolution
+    
+    NS->>ER: HTTP POST /resolve {business_id: 12345}
+    
+    Note over ER,SS: Entity Resolution 4-Stage Pipeline
+    
+    ER->>AI: Stage 1: Standardize name
+    AI-->>ER: "ACME CORPORATION"
+    
+    ER->>SS: Stage 2: HTTP GET /search?fuzzy=true&q=ACME CORPORATION
+    SS->>ES: Fuzzy query (n-gram + phonetic)
+    ES-->>SS: Top 10 candidates with scores
+    SS-->>ER: Candidate list [{id, name, score}, ...]
+    
+    ER->>AI: Stage 3: Generate embeddings
+    AI-->>ER: 384-dim vector
+    ER->>VDB: Semantic similarity search
+    VDB-->>ER: Ranked candidates
+    
+    ER->>AI: Stage 4: ML predict (XGBoost)
+    AI-->>ER: {match_prob: 0.92, target_id: 54321}
+    
+    ER-->>NS: Response {is_duplicate: true, matched_id: 54321, confidence: 0.92}
+    
+    alt Duplicate Found (confidence > 0.85)
+        NS->>NEO: UPDATE existing node (link duplicate)
+        NEO-->>NS: Updated
+        Note over NS: No new node created, no indexing needed
+    else New Business
+        NS->>NEO: CREATE new node (Business:12345)
+        NEO-->>NS: Created
+        NS->>KAFKA: Publish IndexBusiness (search.index.requests)
+        
+        KAFKA->>SS: Consume (Group: search-service)
+        SS->>ES: POST /businesses/_doc/12345
+        ES-->>SS: Indexed
+    end
+```
+
+## Transaction-Based Auto Node Creation Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as React UI
+    participant GW as API Gateway
+    participant TS as Transaction Service
+    participant PG as Payment Gateway
+    participant PGDB as PostgreSQL
+    participant KAFKA as Kafka
+    participant NS as Network Service
+    participant ER as Entity Resolution
+    participant SS as Search Service
+    participant AI as AI Service
+    participant NEO as Neo4j
+    participant ES as Elasticsearch
+
+    UI->>GW: POST /transactions {to: "New Supplier", amount: 15000}
+    GW->>TS: Record transaction
+    TS->>PG: Process payment
+    PG-->>TS: Approved ✓
+    TS->>PGDB: INSERT transaction
+    PGDB-->>TS: txn_id=9999
+    TS->>KAFKA: Publish TransactionApproved (transaction.events)
+    TS-->>UI: 201 Created
+
+    Note over KAFKA,NS: Auto Node Creation Workflow
+
+    KAFKA->>NS: Consume event (Group: network-service)
+    NS->>NEO: Check if "New Supplier" exists
+    NEO-->>NS: Not found
+    
+    NS->>ER: HTTP POST /resolve {name: "New Supplier", ...}
+    ER->>AI: Standardize
+    AI-->>ER: "NEW SUPPLIER CORPORATION"
+    ER->>SS: HTTP GET /search?fuzzy=true
+    SS->>ES: Fuzzy search
+    ES-->>SS: No similar businesses
+    SS-->>ER: Empty candidates []
+    ER->>AI: ML predict
+    AI-->>ER: {is_duplicate: false, confidence: 0.10}
+    ER-->>NS: No match found
+    
+    NS->>NEO: CREATE (Business:67890 {name: "New Supplier", auto_created: true})
+    NEO-->>NS: Created
+    NS->>NEO: CREATE relationship (12345)-[:TRANSACTS_WITH]->(67890)
+    NEO-->>NS: Relationship created
+    
+    NS->>KAFKA: Publish IndexBusiness (search.index.requests)
+    KAFKA->>SS: Consume
+    SS->>ES: Index new business
+    ES-->>SS: Indexed
+```
+
+## Event Flow: Transaction Processing
+
+```mermaid
+sequenceDiagram
+    participant UI as React UI
+    participant GW as API Gateway
+    participant TS as Transaction Service
+    participant PG as PostgreSQL
+    participant KAFKA as Kafka
+    participant PS as Payment Service
+    participant NS as Network Service
+    participant NEO as Neo4j
+    participant SS as Search Service
+    participant ES as Elasticsearch
+    participant TC as Training Consumer
+
+    UI->>GW: POST /transactions
+    GW->>TS: Record transaction
+    TS->>PG: INSERT transaction
+    PG-->>TS: txn_id=9999
+    TS->>KAFKA: TransactionRecorded event
+    TS-->>UI: 201 Created
+
+    par Payment Processing
+        KAFKA->>PS: Consume event (Group: payment-processing)
+        PS->>PS: Process payment
+        PS->>PG: UPDATE settlement_status
+    and Network Update
+        KAFKA->>NS: Consume event (Group: network-service)
+        NS->>NEO: UPDATE relationship weight
+        NEO-->>NS: Updated
+        NS->>SS: HTTP POST /reindex (if significant change)
+        SS->>ES: Update rankings
+        ES-->>SS: Updated
+    and Search Indexing
+        KAFKA->>SS: Consume event (Group: search-service)
+        SS->>ES: Index transaction
+        ES-->>SS: Indexed
+    and Training Pipeline
+        KAFKA->>TC: Consume event (Group: training-pipeline)
+        TC->>PG: INSERT training_data
+    end
+```
+
+## Read Path: Network Map Query
+
+```mermaid
+sequenceDiagram
+    participant UI as React UI
+    participant GW as API Gateway
+    participant NS as Network Service
+    participant REDIS as Redis Cache
+    participant NEO as Neo4j
+    participant BS as Business Service
+    participant PG as PostgreSQL
+
+    UI->>GW: GET /network/12345?depth=2
+    GW->>NS: Get network map
+    NS->>REDIS: GET cache
+    
+    alt Cache Hit
+        REDIS-->>NS: Cached graph
+        NS-->>UI: Return graph (5ms)
+    else Cache Miss
+        REDIS-->>NS: null
+        NS->>NEO: Cypher query (depth=2)
+        NEO-->>NS: Graph structure
+        NS->>BS: Batch get business details
+        BS->>PG: SELECT * WHERE id IN (...)
+        PG-->>BS: Business data
+        BS-->>NS: Enriched data
+        NS->>REDIS: SET cache (TTL=30min)
+        NS-->>UI: Return graph (280ms)
+    end
+```
+
+## Connection Matrix by Protocol
+
+```mermaid
+graph LR
+    subgraph "HTTP/REST Connections"
         GW[API Gateway]
-    end
-    
-    subgraph Services
-        BS[Business]
-        NS[Network]
-        SS[Search]
-        TS[Transaction]
+        BS[Business Service]
+        NS[Network Service<br/>ORCHESTRATOR]
+        SS[Search Service]
+        TS[Transaction Service]
         ER[Entity Resolution]
-        GR[Graph RAG]
+        RAG[Graph RAG]
+        AI[AI Service]
+        
+        GW -.->|HTTP| BS
+        GW -.->|HTTP| NS
+        GW -.->|HTTP| SS
+        NS -.->|HTTP| BS
+        NS -.->|HTTP| ER
+        NS -.->|HTTP| SS
+        ER -.->|HTTP| AI
+        RAG -.->|HTTP| AI
     end
-    
-    subgraph DataStores
+
+    subgraph "Kafka Event Bus"
+        K[Kafka :9092]
+        BS -->|Produce| K
+        TS -->|Produce| K
+        NS -->|Consume + Produce| K
+        SS -->|Consume| K
+        PS -->|Consume| K
+        TC -->|Consume| K
+    end
+
+    subgraph "Database Connections (JDBC/Bolt/Native)"
         PG[(PostgreSQL)]
         NEO[(Neo4j)]
         ES[(Elasticsearch)]
         REDIS[(Redis)]
-    end
-    
-    subgraph Messaging
-        KAFKA[Kafka]
-    end
-    
-    UI --> GW
-    GW --> BS & NS & SS & TS & ER & GR
-    
-    BS --> PG & NEO
-    NS --> NEO & REDIS
-    SS --> ES
-    TS --> PG & KAFKA
-    ER --> PG & KAFKA
-    GR --> NEO & ES
-    
-    KAFKA --> ER
-```
-
-## Flow 1: Business Creation
-
-```mermaid
-sequenceDiagram
-    participant UI as React UI
-    participant GW as Gateway
-    participant BS as Business Service
-    participant PG as PostgreSQL
-    participant NEO as Neo4j
-    participant ES as Elasticsearch
-    participant KAFKA as Kafka
-    
-    UI->>GW: POST /businesses
-    GW->>BS: Forward request
-    BS->>PG: Insert business record
-    BS->>NEO: Create business node
-    BS->>KAFKA: Publish business.created
-    BS-->>GW: 201 Created
-    GW-->>UI: Business details
-    
-    Note over KAFKA,ES: Async Processing
-    KAFKA->>ES: Index business (via consumer)
-```
-
-**Example request/response**
-
-```json
-POST /api/v1/businesses
-{
-  "name": "Acme Supplies",
-  "address": "10 Main St, Austin, TX",
-  "category": "Office Goods"
-}
-```
-
-```json
-201 Created
-{
-  "id": "biz-123",
-  "name": "Acme Supplies",
-  "neo4jNodeId": 445,
-  "status": "ACTIVE"
-}
-```
-
-**Kafka event:** `business.created` with `businessId`, `name`, `category`, `timestamp`.
-
-## Flow 2: Transaction Recording
-
-```mermaid
-sequenceDiagram
-    participant UI as React UI
-    participant GW as Gateway
-    participant TS as Transaction Service
-    participant PG as PostgreSQL
-    participant KAFKA as Kafka
-    participant NS as Network Service
-    participant NEO as Neo4j
-    
-    UI->>GW: POST /transactions
-    GW->>TS: Forward request
-    TS->>PG: Insert transaction
-    TS->>KAFKA: Publish transaction.created
-    TS-->>GW: 201 Created
-    GW-->>UI: Transaction details
-    
-    Note over KAFKA,NEO: Async Weight Update
-    KAFKA->>NS: Consume event
-    NS->>NEO: Update relationship weight
-```
-
-**Example request**
-
-```json
-POST /api/v1/transactions
-{
-  "sourceBusinessId": "biz-123",
-  "targetBusinessId": "biz-999",
-  "type": "INVOICE",
-  "amount": 1200.50,
-  "currency": "USD",
-  "timestamp": "2024-12-10T16:00:00Z"
-}
-```
-
-**Weight calculation:** relationship weight = normalized transaction volume over trailing 90 days. Kafka event `transaction.created` is the single source of truth for downstream weight updates.
-
-## Flow 3: Network Visualization
-
-```mermaid
-sequenceDiagram
-    participant UI as React UI
-    participant GW as Gateway
-    participant NS as Network Service
-    participant REDIS as Redis Cache
-    participant NEO as Neo4j
-    
-    UI->>GW: GET /networks/{id}?depth=2
-    GW->>NS: Forward request
-    
-    alt Cache Hit
-        NS->>REDIS: Check cache
-        REDIS-->>NS: Return cached data
-    else Cache Miss
-        NS->>NEO: MATCH path query
-        NEO-->>NS: Return graph data
-        NS->>REDIS: Store in cache (TTL 10min)
-    end
-    
-    NS-->>GW: Network map
-    GW-->>UI: Nodes and edges
-```
-
-**Example response (depth=1)**
-
-```json
-{
-  "rootBusinessId": "biz-123",
-  "nodes": [
-    { "id": "biz-123", "label": "Acme Supplies" },
-    { "id": "biz-999", "label": "Northwind LLC" }
-  ],
-  "edges": [
-    { "source": "biz-123", "target": "biz-999", "weight": 0.42, "type": "CLIENT" }
-  ],
-  "cache": { "hit": false, "ttlSeconds": 600 }
-}
-```
-
-## Flow 4: Entity Resolution Pipeline
-
-```mermaid
-sequenceDiagram
-    participant IF as Ingest Flow
-    participant KAFKA as Kafka
-    participant ER as Entity Resolution
-    participant AI as AI Service
-    participant PG as PostgreSQL
-    participant RF as Resolve Flow
-    
-    IF->>KAFKA: Publish entity (entity.pending)
-    
-    Note over ER: Standardize Stage
-    KAFKA->>ER: Consume entity
-    ER->>ER: Normalize name, address
-    
-    Note over ER: Block Stage
-    ER->>ER: Generate blocking keys
-    ER->>PG: Find candidates in block
-    
-    Note over ER: Compare Stage
-    ER->>AI: Generate feature vectors
-    AI-->>ER: Similarity scores
-    
-    Note over ER: Classify Stage
-    ER->>AI: Apply ML classifier
-    AI-->>ER: Match/Non-match/Review
-    
-    alt High Confidence Match (>=0.85)
-        ER->>KAFKA: Publish merge event
-        KAFKA->>RF: Process merge
-        RF->>PG: Merge entities
-    else Low Confidence (0.50-0.85)
-    ER->>PG: Flag for review
-    else Non-Match (<0.50)
-        ER->>PG: Keep separate
+        VDB[(Milvus)]
+        
+        BS -->|JDBC| PG
+        TS -->|JDBC| PG
+        TC -->|JDBC| PG
+        NS -->|Bolt| NEO
+        SS -->|Bolt| NEO
+        RAG -->|Bolt| NEO
+        SS -->|HTTP| ES
+        ER -->|HTTP| ES
+        NS -->|Native| REDIS
+        SS -->|Native| REDIS
+        AUTH -->|Native| REDIS
+        SLA -->|Native| REDIS
+        ER -->|gRPC| VDB
+        RAG -->|gRPC| VDB
+        AI -->|gRPC| VDB
     end
 ```
 
-**Example inputs**
+---
 
-- Ingest event (`entity.pending`): `{ "rawName": "Acme Supply Co.", "address": "10 Main St", "country": "US" }`
-- Standardize output: `{ "name_std": "ACME SUPPLY COMPANY", "address_std": "10 MAIN STREET, US" }`
-- Blocking key: `SUPPLY|US|10MAIN`
+## Architecture Pattern: Orchestration Model
 
-**Match decisions**
+### Why This Architecture?
 
-- `>=0.85`: auto-merge, publish `entity.resolved`
-- `0.50-0.85`: create review task, expose in review UI
-- `<0.50`: keep separate, no merge
+**Previous Architecture Issues:**
+- Entity Resolution consuming directly from Kafka created tight coupling
+- No coordination between graph updates and entity matching
+- Search Service manually polling for updates
+- Difficult to ensure consistency across Neo4j, Elasticsearch, and ML models
 
-## Flow 5: Graph RAG Query
+**Improved Architecture Benefits:**
 
-```mermaid
-sequenceDiagram
-    participant UI as React UI
-    participant GW as Gateway
-    participant GR as Graph RAG
-    participant NEO as Neo4j
-    participant VDB as Milvus
-    participant AI as AI Service
-    
-    UI->>GW: POST /graph-rag/query
-    GW->>GR: Forward query
-    
-    Note over GR: Query Parsing
-    GR->>AI: Parse natural language
-    AI-->>GR: Entities and intent
-    
-    Note over GR: Context Retrieval
-    GR->>NEO: Graph traversal
-    NEO-->>GR: Related nodes
-    GR->>VDB: Vector similarity
-    VDB-->>GR: Similar entities
-    
-    Note over GR: Response Generation
-    GR->>AI: Generate response
-    AI-->>GR: Natural language answer
-    
-    GR-->>GW: Response with sources
-    GW-->>UI: Display answer
+1. **Network Service as Orchestrator**
+   - Single point of control for graph operations
+   - Coordinates entity resolution synchronously
+   - Ensures Neo4j is updated before entity matching begins
+   - Controls Kafka event flow
+
+2. **Search Service Real-time Indexing**
+   - Consumes from Kafka for immediate indexing
+   - No polling required
+   - Parallel processing with Network Service
+   - Independent scaling
+
+3. **Entity Resolution as Stateless Service**
+   - HTTP-based (synchronous) invocation
+   - No Kafka consumer lag to manage
+   - Easier to scale horizontally
+   - Network Service controls when/how it's called
+
+### Data Flow Summary
+
+```
+Business Created Event Flow:
+1. Business Service → Kafka (business.events)
+2. Network Service consumes event
+   ├─→ Creates Neo4j node
+   ├─→ Calls Entity Resolution (HTTP)
+   │   └─→ Entity Resolution: Elasticsearch + Milvus + AI Service
+   ├─→ If match found: Creates relationship in Neo4j
+   ├─→ Publishes match event to Kafka (entity.matches)
+   └─→ Invalidates Redis cache
+3. Search Service consumes event (parallel)
+   └─→ Indexes in Elasticsearch
+
+Transaction Event Flow:
+1. Transaction Service → Kafka (transaction.events)
+2. Network Service consumes event
+   ├─→ Updates relationship weight in Neo4j
+   ├─→ If significant change: Calls Search Service (HTTP)
+   └─→ Invalidates Redis cache
+3. Search Service consumes event (parallel)
+   └─→ Indexes transaction in Elasticsearch
+4. Payment Service consumes event (parallel)
+   └─→ Processes payment
 ```
 
-**Example request/response**
+### Consumer Groups
 
-```json
-POST /api/v1/graph-rag/query
-{
-  "question": "Who are Acme's top vendors in Texas?"
-}
-```
+| Consumer Group | Topics | Services | Purpose |
+|----------------|--------|----------|---------|
+| network-service | business.events, transaction.events | Network Service | Orchestration & graph updates |
+| search-service | business.events, transaction.events | Search Service | Real-time indexing |
+| payment-processing | transaction.events | Payment Service | Payment processing |
+| training-pipeline | business.events, entity.matches, user.feedback | Training Consumer | ML training data |
 
-```json
-{
-  "answer": "Acme's top vendors in Texas are Northwind LLC and Lone Star Parts.",
-  "sources": [
-    { "type": "graph", "nodeId": "biz-999" },
-    { "type": "graph", "nodeId": "biz-777" },
-    { "type": "vector", "similarity": 0.82 }
-  ]
-}
-```
-
-## Flow 6: Search
-
-```mermaid
-sequenceDiagram
-    participant UI as React UI
-    participant GW as Gateway
-    participant SS as Search Service
-    participant ES as Elasticsearch
-    
-    UI->>GW: GET /search?query=acme
-    GW->>SS: Forward request
-    
-    SS->>ES: Multi-match query
-    Note over ES: Search fields:<br/>name, address, category
-    ES-->>SS: Scored results
-    
-    SS->>SS: Apply business rules
-    SS-->>GW: Paginated results
-    GW-->>UI: Display results
-```
-
-**Example query/response**
-
-```json
-GET /api/v1/search/entities?q=acme&size=3
-```
-
-```json
-{
-  "results": [
-    { "id": "biz-123", "name": "Acme Supplies", "score": 8.7 },
-    { "id": "biz-124", "name": "Acme Industrial", "score": 7.9 }
-  ],
-  "tookMs": 42
-}
-```
-
-## Data Consistency Patterns
-
-### Eventually Consistent Flows
-
-- Search indexing (async via Kafka)
-- Relationship weight updates (async via Kafka)
-- Entity resolution processing (async via Kafka)
-
-### Strongly Consistent Flows
-
-- Business creation (sync to PostgreSQL + Neo4j)
-- Transaction recording (sync to PostgreSQL)
-- User feedback submission (sync to PostgreSQL)
-
-## Caching Strategy
-
-| Data Type | Cache Location | TTL |
-|-----------|----------------|-----|
-| Network maps | Redis | 10 minutes |
-| Search results | Redis | 5 minutes |
-| Business details | Redis | 15 minutes |
-| SLA metrics | In-memory | 1 minute |
-
-## Event Topics
-
-| Topic | Producer | Consumer(s) |
-|-------|----------|-------------|
-| business.created | Business Service | Search, Entity Resolution |
-| transaction.created | Transaction Service | Network Service |
-| entity.pending | Ingest Flow | Entity Resolution |
-| entity.resolved | Entity Resolution | Resolve Flow |
-| feedback.received | UI | Training Consumer |
+**Total Kafka Consumer Groups**: 4 (down from 5 in previous architecture)
+**Entity Resolution**: HTTP-based (no consumer group needed)
